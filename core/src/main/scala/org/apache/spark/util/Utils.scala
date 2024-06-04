@@ -22,13 +22,13 @@ import java.lang.{Byte => JByte}
 import java.lang.management.{LockInfo, ManagementFactory, MonitorInfo, PlatformManagedObject, ThreadInfo}
 import java.lang.reflect.InvocationTargetException
 import java.math.{MathContext, RoundingMode}
-import java.net._
+import java.net.{HttpURLConnection, _}
 import java.nio.ByteBuffer
 import java.nio.channels.{Channels, FileChannel, WritableByteChannel}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.security.SecureRandom
-import java.util.{Locale, Properties, Random, UUID}
+import java.util.{Base64, Locale, Properties, Random, UUID}
 import java.util.concurrent._
 import java.util.concurrent.TimeUnit.NANOSECONDS
 import java.util.zip.{GZIPInputStream, ZipInputStream}
@@ -575,7 +575,7 @@ private[spark] object Utils
       fileOverwrite: Boolean): Unit = {
     val tempFile = File.createTempFile("fetchFileTemp", null,
       new File(destFile.getParentFile.getAbsolutePath))
-    logInfo(s"Fetching $url to $tempFile")
+    logInfo(s"Fetching ${Utils.maskUserInfo(url)} to $tempFile")
 
     try {
       val out = new FileOutputStream(tempFile)
@@ -617,7 +617,7 @@ private[spark] object Utils
       if (!filesEqualRecursive(sourceFile, destFile)) {
         if (fileOverwrite) {
           logInfo(
-            s"File $destFile exists and does not match contents of $url, replacing it with $url"
+            s"File $destFile exists and does not match contents of ${Utils.maskUserInfo(url)}, replacing it with ${Utils.maskUserInfo(url)}"
           )
           if (!destFile.delete()) {
             throw new SparkException(
@@ -629,7 +629,7 @@ private[spark] object Utils
           }
         } else {
           throw new SparkException(
-            s"File $destFile exists and does not match contents of $url")
+            s"File $destFile exists and does not match contents of ${Utils.maskUserInfo(url)}")
         }
       } else {
         // Do nothing if the file contents are the same, i.e. this file has been copied
@@ -648,7 +648,7 @@ private[spark] object Utils
     if (removeSourceFile) {
       Files.move(sourceFile.toPath, destFile.toPath)
     } else {
-      logInfo(s"Copying ${sourceFile.getAbsolutePath} to ${destFile.getAbsolutePath}")
+      logInfo(s"Copying ${Utils.maskUserInfo({sourceFile.getAbsolutePath})} to ${destFile.getAbsolutePath}")
       copyRecursive(sourceFile, destFile)
     }
   }
@@ -710,9 +710,16 @@ private[spark] object Utils
         val is = Channels.newInputStream(source)
         downloadFile(url, is, targetFile, fileOverwrite)
       case "http" | "https" | "ftp" =>
-        val uc = new URL(url).openConnection()
-        val timeoutMs =
-          conf.getTimeAsSeconds("spark.files.fetchTimeout", "60s").toInt * 1000
+        val url_object = new URL(url)
+        val userInfo = url_object.getUserInfo
+        val uc = url_object.openConnection().asInstanceOf[HttpURLConnection]
+        // Set HTTP method as GET
+        uc.setRequestMethod("GET")
+        if (userInfo != null) {
+		  val authInfo = "Basic " + Base64.getEncoder.encodeToString(userInfo.getBytes)
+          uc.setRequestProperty("Authorization", authInfo)
+        }
+        val timeoutMs = conf.getTimeAsSeconds("spark.files.fetchTimeout", "60s").toInt * 1000
         uc.setConnectTimeout(timeoutMs)
         uc.setReadTimeout(timeoutMs)
         uc.connect()
@@ -3104,6 +3111,17 @@ private[spark] object Utils
       val useG1GC = valueMethod.invoke(useG1GCObject).asInstanceOf[String]
       "true".equals(useG1GC)
     }.getOrElse(false)
+  }
+  /**
+   *Returns the URL string with credentials masked
+   */
+  def maskUserInfo(pathUrl: String): String = {
+    if (pathUrl.matches("^(https|http|ftp)://.*$")) {
+      pathUrl.replaceAll("(?<=//).*(?=@)", "******")
+    }
+    else{
+      pathUrl
+    }
   }
 }
 

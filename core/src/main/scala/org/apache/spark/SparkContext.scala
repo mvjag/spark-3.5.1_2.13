@@ -1789,7 +1789,7 @@ class SparkContext(config: SparkConf) extends Logging {
         addedFiles
           .getOrElseUpdate(jobArtifactUUID, new ConcurrentHashMap[String, Long]().asScala)
           .putIfAbsent(key, timestamp).isEmpty) {
-      logInfo(s"Added file $path at $key with timestamp $timestamp")
+      logInfo(s"Added file ${Utils.maskUserInfo(path)} at ${Utils.maskUserInfo(key)} with timestamp $timestamp")
       // Fetch the file locally so that closures which are run on the driver can still use the
       // SparkFiles API to access files.
       Utils.fetchFile(uri.toString, root, conf, hadoopConfiguration, timestamp, useCache = false)
@@ -1801,7 +1801,7 @@ class SparkContext(config: SparkConf) extends Logging {
           .putIfAbsent(
           UriBuilder.fromUri(new URI(key)).fragment(uri.getFragment).build().toString,
           timestamp).isEmpty) {
-      logInfo(s"Added archive $path at $key with timestamp $timestamp")
+      logInfo(s"Added archive ${Utils.maskUserInfo(path)} at ${Utils.maskUserInfo(key)} with timestamp $timestamp")
       // If the scheme is file, use URI to simply copy instead of downloading.
       val uriToUse = if (!isLocal && scheme == "file") uri else new URI(key)
       val uriToDownload = UriBuilder.fromUri(uriToUse).fragment(null).build()
@@ -1811,12 +1811,12 @@ class SparkContext(config: SparkConf) extends Logging {
         root,
         if (uri.getFragment != null) uri.getFragment else source.getName)
       logInfo(
-        s"Unpacking an archive $path from ${source.getAbsolutePath} to ${dest.getAbsolutePath}")
+        s"Unpacking an archive ${Utils.maskUserInfo(path)} from ${Utils.maskUserInfo({source.getAbsolutePath})} to ${dest.getAbsolutePath}")
       Utils.deleteRecursively(dest)
       Utils.unpack(source, dest)
       postEnvironmentUpdate()
     } else {
-      logWarning(s"The path $path has been added already. Overwriting of added paths " +
+      logWarning(s"The path ${Utils.maskUserInfo(path)} has been added already. Overwriting of added paths " + 
         "is not supported in the current version.")
     }
   }
@@ -2107,7 +2107,7 @@ class SparkContext(config: SparkConf) extends Logging {
         Seq(env.rpcEnv.fileServer.addJar(file))
       } catch {
         case NonFatal(e) =>
-          logError(s"Failed to add $path to Spark environment", e)
+          logError(s"Failed to add ${Utils.maskUserInfo(path)} to Spark environment", e)
           Nil
       }
     }
@@ -2119,16 +2119,16 @@ class SparkContext(config: SparkConf) extends Logging {
         try {
           val fs = hadoopPath.getFileSystem(hadoopConfiguration)
           if (!fs.exists(hadoopPath)) {
-            throw new FileNotFoundException(s"Jar ${path} not found")
+            throw new FileNotFoundException(s"Jar ${Utils.maskUserInfo(path)} not found")
           }
           if (fs.getFileStatus(hadoopPath).isDirectory) {
             throw new IllegalArgumentException(
-              s"Directory ${path} is not allowed for addJar")
+              s"Directory ${Utils.maskUserInfo(path)} is not allowed for addJar")
           }
           Seq(path)
         } catch {
           case NonFatal(e) =>
-            logError(s"Failed to add $path to Spark environment", e)
+            logError(s"Failed to add ${Utils.maskUserInfo(path)} to Spark environment", e)
             Nil
         }
       } else {
@@ -2172,12 +2172,12 @@ class SparkContext(config: SparkConf) extends Logging {
           .putIfAbsent(_, timestamp).isEmpty)
         if (added.nonEmpty) {
           val jarMessage = if (scheme != "ivy") "JAR" else "dependency jars of Ivy URI"
-          logInfo(s"Added $jarMessage $path at ${added.mkString(",")} with timestamp $timestamp")
+          logInfo(s"Added $jarMessage ${Utils.maskUserInfo(path)} at ${Utils.maskUserInfo({added.mkString(",")})} with timestamp $timestamp")
           postEnvironmentUpdate()
         }
         if (existed.nonEmpty) {
           val jarMessage = if (scheme != "ivy") "JAR" else "dependency jars of Ivy URI"
-          logWarning(s"The $jarMessage $path at ${existed.mkString(",")} has been added already." +
+          logWarning(s"The $jarMessage ${Utils.maskUserInfo(path)} at ${Utils.maskUserInfo({added.mkString(",")})} has been added already." + 
             " Overwriting of added jar is not supported in the current version.")
         }
       }

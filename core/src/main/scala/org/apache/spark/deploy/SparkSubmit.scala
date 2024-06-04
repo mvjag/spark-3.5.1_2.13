@@ -433,7 +433,7 @@ private[spark] class SparkSubmit extends Logging {
                 workingDirectory,
                 if (resolvedUri.getFragment != null) resolvedUri.getFragment else source.getName)
                 .getCanonicalFile
-              logInfo(s"Files $resolvedUri from $source to $dest")
+              logInfo(s"Files ${Utils.maskUserInfo(resolvedUri.toString())} from $source to $dest")
               Utils.deleteRecursively(dest)
               if (isArchive) {
                 Utils.unpack(source, dest)
