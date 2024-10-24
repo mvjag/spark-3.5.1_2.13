@@ -1131,14 +1131,14 @@ private[spark] class Executor(
 
       // Fetch missing dependencies
       for ((name, timestamp) <- newFiles if state.currentFiles.getOrElse(name, -1L) < timestamp) {
-        logInfo(s"Fetching $name with timestamp $timestamp")
-        // Fetch file with useCache mode, close cache for local mode.
+        logInfo(s"Fetching ${Utils.maskUserInfo(name)} with timestamp $timestamp")
+		// Fetch file with useCache mode, close cache for local mode.
         Utils.fetchFile(name, root, conf, hadoopConf, timestamp, useCache = !isLocal)
         state.currentFiles(name) = timestamp
       }
       for ((name, timestamp) <- newArchives if
           state.currentArchives.getOrElse(name, -1L) < timestamp) {
-        logInfo(s"Fetching $name with timestamp $timestamp")
+        logInfo(s"Fetching ${Utils.maskUserInfo(name)} with timestamp $timestamp")
         val sourceURI = new URI(name)
         val uriToDownload = UriBuilder.fromUri(sourceURI).fragment(null).build()
         val source = Utils.fetchFile(uriToDownload.toString, Utils.createTempDir(), conf,
@@ -1147,7 +1147,7 @@ private[spark] class Executor(
           root,
           if (sourceURI.getFragment != null) sourceURI.getFragment else source.getName)
         logInfo(
-          s"Unpacking an archive $name from ${source.getAbsolutePath} to ${dest.getAbsolutePath}")
+          s"Unpacking an archive ${Utils.maskUserInfo(name)} from ${Utils.maskUserInfo({source.getAbsolutePath})} to ${dest.getAbsolutePath}")
         Utils.deleteRecursively(dest)
         Utils.unpack(source, dest)
         state.currentArchives(name) = timestamp
@@ -1158,7 +1158,7 @@ private[spark] class Executor(
           .orElse(state.currentJars.get(localName))
           .getOrElse(-1L)
         if (currentTimeStamp < timestamp) {
-          logInfo(s"Fetching $name with timestamp $timestamp")
+          logInfo(s"Fetching ${Utils.maskUserInfo(name)} with timestamp $timestamp")
           // Fetch file with useCache mode, close cache for local mode.
           Utils.fetchFile(name, root, conf,
             hadoopConf, timestamp, useCache = !isLocal)
@@ -1166,7 +1166,7 @@ private[spark] class Executor(
           // Add it to our class loader
           val url = new File(root, localName).toURI.toURL
           if (!state.urlClassLoader.getURLs().contains(url)) {
-            logInfo(s"Adding $url to class loader ${state.sessionUUID}")
+            logInfo(s"Adding ${Utils.maskUserInfo(url.toString())} to class loader ${state.sessionUUID}")
             state.urlClassLoader.addURL(url)
             if (isStubbingEnabledForState(state.sessionUUID)) {
               renewClassLoader = true
